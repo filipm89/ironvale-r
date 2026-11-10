@@ -1,0 +1,35 @@
+name: Notify Server
+
+# Runs automatically when you publish a release (not a draft).
+# Downloads the attached .exe and world.json, then tells the Worker about them
+# so every player's game updates on its next launch.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Notify Worker — exe and world
+        env:
+          IRONVALE_WORKER_URL: ${{ secrets.IRONVALE_WORKER_URL }}
+          IRONVALE_ADMIN_KEY: ${{ secrets.IRONVALE_ADMIN_KEY }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          $base = "https://github.com/${{ github.repository }}/releases/download/$tag"
+
+          Invoke-WebRequest "$base/ironvale.exe" -OutFile ironvale.exe
+          Invoke-WebRequest "$base/world.json"   -OutFile world.json
+
+          python tools/cloudflare/admin.py release ironvale.exe "$base/ironvale.exe" --version $version
+          python tools/cloudflare/admin.py world   world.json   "$base/world.json"
